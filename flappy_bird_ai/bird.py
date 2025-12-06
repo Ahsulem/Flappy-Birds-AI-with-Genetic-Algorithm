@@ -1,113 +1,104 @@
 import pygame
-from config import (BIRD_X, BIRD_WIDTH, BIRD_HEIGHT, GRAVITY, 
-                    JUMP_STRENGTH, MAX_VELOCITY, SCREEN_HEIGHT,
-                    INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE, YELLOW, ORANGE)
+from config import *
 from neural_network import NeuralNetwork
 
-
 class Bird:
-    """Represents a bird controlled by a neural network."""
-    
-    def __init__(self, y=None):
-        """Initialize the bird at the given y position."""
+    def __init__(self, neural_network=None):
+        # Position (bird starts in middle of screen vertically)
         self.x = BIRD_X
-        self.y = y if y is not None else SCREEN_HEIGHT // 2
-        self.width = BIRD_WIDTH
-        self.height = BIRD_HEIGHT
-        self.velocity = 0
-        self.alive = True
-        self.score = 0
-        self.fitness = 0
-        self.time_alive = 0
+        self.y = SCREEN_HEIGHT // 2
         
-        # Neural network brain
-        self.brain = NeuralNetwork(INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE)
+        # Physics
+        self.velocity = 0  # Current vertical velocity
+        
+        # State
+        self.alive = True
+        self.fitness = 0  # How well this bird performed
+        self.score = 0    # Pipes passed
+        
+        # Brain (neural network) - will be added in Phase 2
+        self.brain = neural_network
     
-    def jump(self):
-        """Make the bird jump."""
-        self.velocity = JUMP_STRENGTH
+    def flap(self):
+        """Make the bird flap (jump up)"""
+        if self.alive:
+            self.velocity = JUMP_STRENGTH
     
     def update(self):
-        """Update bird position and velocity."""
+        """Update bird physics each frame"""
         if not self.alive:
             return
         
         # Apply gravity
         self.velocity += GRAVITY
+        self.y += self. velocity
         
-        # Limit velocity
-        self.velocity = max(min(self.velocity, MAX_VELOCITY), -MAX_VELOCITY)
+        # Increase fitness for surviving (each frame alive = +1 fitness)
+        self.fitness += 1
         
-        # Update position
-        self.y += self.velocity
-        
-        # Increment time alive
-        self.time_alive += 1
-        
-        # Check boundaries
-        if self.y < 0:
-            self.y = 0
+        # Check boundaries (ceiling and floor)
+        if self.y - BIRD_RADIUS <= 0:  # Hit ceiling
+            self.y = BIRD_RADIUS
             self.velocity = 0
-        elif self.y + self.height > SCREEN_HEIGHT:
-            self.y = SCREEN_HEIGHT - self.height
-            self.die()
+        
+        if self.y + BIRD_RADIUS >= SCREEN_HEIGHT - 50:  # Hit ground
+            self.y = SCREEN_HEIGHT - 50 - BIRD_RADIUS
+            self. die()
     
     def die(self):
-        """Mark the bird as dead and calculate fitness."""
+        """Bird has crashed"""
         self.alive = False
-        # Fitness is based on time alive and score
-        self.fitness = self.time_alive + (self.score * 100)
     
-    def think(self, pipe):
-        """
-        Use the neural network to decide whether to jump.
-        
-        Args:
-            pipe: The nearest pipe to consider
-        """
-        if not self.alive or pipe is None:
-            return
-        
-        # Normalize inputs
-        inputs = [
-            self.y / SCREEN_HEIGHT,  # Bird's y position
-            self.velocity / MAX_VELOCITY,  # Bird's velocity
-            pipe.x / 400,  # Pipe's x position (normalized by screen width)
-            pipe.top / SCREEN_HEIGHT,  # Top pipe's bottom y
-            pipe.bottom / SCREEN_HEIGHT  # Bottom pipe's top y
-        ]
-        
-        # Get output from neural network
-        output = self.brain.forward(inputs)
-        
-        # Jump if output is greater than 0.5
-        if output > 0.5:
-            self.jump()
-    
-    def get_rect(self):
-        """Get the bird's rectangle for collision detection."""
-        return pygame.Rect(self.x, self.y, self.width, self.height)
-    
-    def draw(self, screen):
-        """Draw the bird on the screen."""
+    def draw(self, screen, is_best=False):
+        """Draw the bird on screen"""
         if not self.alive:
             return
         
-        # Draw bird body (ellipse for a rounder look)
-        bird_rect = pygame.Rect(self.x, self.y, self.width, self.height)
-        pygame.draw.ellipse(screen, YELLOW, bird_rect)
-        pygame.draw.ellipse(screen, ORANGE, bird_rect, 2)
+        # Best bird gets a special color (orange), others are yellow
+        color = ORANGE if is_best else YELLOW
         
-        # Draw eye
-        eye_x = self.x + self.width - 8
-        eye_y = self.y + 6
-        pygame.draw.circle(screen, (255, 255, 255), (eye_x, eye_y), 4)
-        pygame.draw.circle(screen, (0, 0, 0), (eye_x + 1, eye_y), 2)
+        # Draw body (circle)
+        pygame.draw.circle(screen, color, (int(self.x), int(self. y)), BIRD_RADIUS)
         
-        # Draw beak
-        beak_points = [
-            (self.x + self.width, self.y + self.height // 2 - 2),
-            (self.x + self.width + 8, self.y + self.height // 2),
-            (self.x + self.width, self.y + self.height // 2 + 2)
+        # Draw eye (small white circle with black pupil)
+        eye_x = int(self. x + 5)
+        eye_y = int(self.y - 3)
+        pygame. draw.circle(screen, WHITE, (eye_x, eye_y), 5)  # Eye white
+        pygame.draw.circle(screen, BLACK, (eye_x + 2, eye_y), 2)  # Pupil
+        
+        # Draw beak (small orange triangle/rectangle)
+        beak_rect = pygame.Rect(self.x + BIRD_RADIUS - 2, self.y + 2, 10, 5)
+        pygame. draw.rect(screen, ORANGE if not is_best else RED, beak_rect)
+    
+    def think(self, pipes):
+        """
+        Use neural network to decide whether to flap. 
+        Will be implemented in Phase 2! 
+        """
+        if self.brain is None:
+            return
+        
+        # Find the next pipe to navigate
+        next_pipe = None
+        for pipe in pipes:
+            if pipe.x + PIPE_WIDTH > self.x:  # Pipe is ahead of bird
+                next_pipe = pipe
+                break
+        
+        if next_pipe is None:
+            return
+        
+        # Prepare inputs for neural network (normalized to 0-1 range)
+        inputs = [
+            self.y / SCREEN_HEIGHT,                              # Bird's Y position
+            next_pipe.gap_top / SCREEN_HEIGHT,                   # Top of gap
+            next_pipe.gap_bottom / SCREEN_HEIGHT,                # Bottom of gap  
+            self.velocity / 10                                    # Bird's velocity
         ]
-        pygame.draw.polygon(screen, ORANGE, beak_points)
+        
+        # Get decision from brain
+        output = self.brain. forward(inputs)
+        
+        # If output > 0.5, flap! 
+        if output[0] > 0.5:
+            self.flap()

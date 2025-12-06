@@ -19,8 +19,10 @@ RED = (255, 0, 0)
 BIRD_X = 100
 BIRD_WIDTH = 34
 BIRD_HEIGHT = 24
+BIRD_RADIUS = 15
 GRAVITY = 0.5
 JUMP_STRENGTH = -8 #did it negative cuz Y goes downward and gravity comes to play
+FLAP_STRENGTH = -8
 MAX_VELOCITY = 10
 
 # Pipe settings

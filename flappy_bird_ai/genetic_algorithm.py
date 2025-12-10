@@ -1,139 +1,97 @@
+# ===========================================
+# GENETIC ALGORITHM - Evolution Engine
+# ===========================================
+
 import numpy as np
 import random
-from config import (POPULATION_SIZE, MUTATION_RATE, MUTATION_STRENGTH, 
-                    ELITISM_COUNT, SCREEN_HEIGHT)
-from bird import Bird
+from neural_network import NeuralNetwork
+from config import POPULATION_SIZE, MUTATION_RATE, MUTATION_STRENGTH
 
-
-class GeneticAlgorithm:
-    """Genetic algorithm for evolving bird neural networks."""
-    
+class GeneticAlgorithm: 
     def __init__(self):
-        """Initialize the genetic algorithm with a population of birds."""
         self.generation = 1
-        self.best_fitness = 0
-        self.best_score = 0
-        self.population = self.create_population()
+        self.best_fitness_history = []
+        self.avg_fitness_history = []
     
-    def create_population(self):
-        """Create a new population of birds."""
-        return [Bird(SCREEN_HEIGHT // 2) for _ in range(POPULATION_SIZE)]
+    def create_initial_population(self, Bird):
+        return [Bird() for _ in range(POPULATION_SIZE)]
     
-    def get_alive_birds(self):
-        """Get all birds that are still alive."""
-        return [bird for bird in self.population if bird.alive]
+    def calculate_fitness(self, birds):
+        return sorted(birds, key=lambda b: b.fitness, reverse=True)
     
-    def all_dead(self):
-        """Check if all birds are dead."""
-        return len(self.get_alive_birds()) == 0
+    def selection(self, birds, num_parents=10):
+        sorted_birds = self.calculate_fitness(birds)
+        return sorted_birds[:num_parents]
     
-    def evolve(self):
-        """
-        Evolve the population to create the next generation.
-        Uses elitism, selection, crossover, and mutation.
-        """
-        # Sort population by fitness
-        self.population.sort(key=lambda b: b.fitness, reverse=True)
+    def crossover(self, parent_a, parent_b):
+        child = NeuralNetwork()
         
-        # Track best fitness and score
-        if self.population[0].fitness > self.best_fitness:
-            self.best_fitness = self.population[0].fitness
-        if self.population[0].score > self.best_score:
-            self.best_score = self.population[0].score
+        mask = np.random.rand(*parent_a.weights_input_hidden.shape) > 0.5
+        child. weights_input_hidden = np.where(mask, parent_a.weights_input_hidden, parent_b.weights_input_hidden)
         
-        # Create new population
-        new_population = []
+        mask = np.random.rand(*parent_a.bias_hidden.shape) > 0.5
+        child.bias_hidden = np.where(mask, parent_a.bias_hidden, parent_b.bias_hidden)
         
-        # Elitism: keep the best birds unchanged
-        for i in range(ELITISM_COUNT):
-            elite_bird = Bird(SCREEN_HEIGHT // 2)
-            elite_bird.brain = self.population[i].brain.copy()
-            new_population.append(elite_bird)
+        mask = np. random.rand(*parent_a. weights_hidden_output.shape) > 0.5
+        child.weights_hidden_output = np.where(mask, parent_a.weights_hidden_output, parent_b.weights_hidden_output)
         
-        # Fill the rest with offspring
-        while len(new_population) < POPULATION_SIZE:
-            # Select parents
-            parent1 = self.select_parent()
-            parent2 = self.select_parent()
-            
-            # Create child through crossover
-            child = Bird(SCREEN_HEIGHT // 2)
-            child.brain = self.crossover(parent1.brain, parent2.brain)
-            
-            # Mutate child
-            self.mutate(child.brain)
-            
-            new_population.append(child)
+        mask = np.random.rand(*parent_a.bias_output.shape) > 0.5
+        child. bias_output = np.where(mask, parent_a.bias_output, parent_b.bias_output)
         
-        # Update population and generation
-        self.population = new_population
-        self.generation += 1
-    
-    def select_parent(self):
-        """
-        Select a parent using tournament selection.
-        
-        Returns:
-            Selected bird
-        """
-        tournament_size = 5
-        tournament = random.sample(self.population, tournament_size)
-        return max(tournament, key=lambda b: b.fitness)
-    
-    def crossover(self, brain1, brain2):
-        """
-        Perform crossover between two neural networks.
-        
-        Args:
-            brain1: First parent's neural network
-            brain2: Second parent's neural network
-            
-        Returns:
-            New neural network with mixed weights
-        """
-        from neural_network import NeuralNetwork
-        
-        child_brain = NeuralNetwork(
-            brain1.input_size,
-            brain1.hidden_size,
-            brain1.output_size
-        )
-        
-        weights1 = brain1.get_weights()
-        weights2 = brain2.get_weights()
-        
-        # Uniform crossover
-        child_weights = np.where(
-            np.random.random(len(weights1)) < 0.5,
-            weights1,
-            weights2
-        )
-        
-        child_brain.set_weights(child_weights)
-        return child_brain
+        return child
     
     def mutate(self, brain):
-        """
-        Mutate a neural network's weights.
+        mutation_mask = np.random.rand(*brain.weights_input_hidden.shape) < MUTATION_RATE
+        mutations = np.random.randn(*brain.weights_input_hidden.shape) * MUTATION_STRENGTH
+        brain.weights_input_hidden += mutation_mask * mutations
         
-        Args:
-            brain: Neural network to mutate
-        """
-        weights = brain.get_weights()
+        mutation_mask = np.random. rand(*brain.bias_hidden. shape) < MUTATION_RATE
+        mutations = np.random. randn(*brain.bias_hidden.shape) * MUTATION_STRENGTH
+        brain.bias_hidden += mutation_mask * mutations
         
-        for i in range(len(weights)):
-            if random.random() < MUTATION_RATE:
-                # Add Gaussian noise
-                weights[i] += np.random.randn() * MUTATION_STRENGTH
+        mutation_mask = np. random.rand(*brain.weights_hidden_output.shape) < MUTATION_RATE
+        mutations = np.random.randn(*brain.weights_hidden_output.shape) * MUTATION_STRENGTH
+        brain.weights_hidden_output += mutation_mask * mutations
         
-        brain.set_weights(weights)
+        mutation_mask = np. random.rand(*brain.bias_output.shape) < MUTATION_RATE
+        mutations = np. random.randn(*brain.bias_output.shape) * MUTATION_STRENGTH
+        brain.bias_output += mutation_mask * mutations
     
-    def reset_population(self):
-        """Reset all birds for a new round."""
-        for bird in self.population:
-            bird.y = SCREEN_HEIGHT // 2
-            bird.velocity = 0
-            bird.alive = True
-            bird.score = 0
-            bird.fitness = 0
-            bird.time_alive = 0
+    def create_next_generation(self, birds, Bird):
+        sorted_birds = self.calculate_fitness(birds)
+        best_fitness = sorted_birds[0].fitness
+        avg_fitness = sum(b.fitness for b in birds) / len(birds)
+        
+        self.best_fitness_history.append(best_fitness)
+        self.avg_fitness_history.append(avg_fitness)
+        
+        parents = self.selection(birds, num_parents=10)
+        new_birds = []
+        
+        # Elitism:  keep best 2 unchanged
+        best_brain = parents[0].brain.copy()
+        new_birds.append(Bird(neural_network=best_brain))
+        
+        if len(parents) > 1:
+            second_best_brain = parents[1].brain. copy()
+            new_birds. append(Bird(neural_network=second_best_brain))
+        
+        # Create rest through crossover + mutation
+        while len(new_birds) < POPULATION_SIZE:
+            parent_a = random.choice(parents[: 5])
+            parent_b = random.choice(parents)
+            
+            child_brain = self.crossover(parent_a.brain, parent_b.brain)
+            self.mutate(child_brain)
+            
+            new_birds. append(Bird(neural_network=child_brain))
+        
+        self.generation += 1
+        return new_birds
+    
+    def get_stats(self):
+        return {
+            'generation': self.generation,
+            'best_fitness_history': self.best_fitness_history,
+            'avg_fitness_history': self.avg_fitness_history
+        }

@@ -1,82 +1,111 @@
+# ===========================================
+# PIPE CLASS - The Obstacles
+# ===========================================
+
 import pygame
 import random
-from config import (SCREEN_HEIGHT, PIPE_WIDTH, PIPE_GAP, 
-                    PIPE_VELOCITY, GREEN, DARK_GREEN)
-
+from config import *
 
 class Pipe:
-    """Represents a pair of pipes (top and bottom)."""
-    
-    def __init__(self, x):
-        """
-        Initialize a pipe pair at the given x position.
+    def __init__(self, x=None):
+        self.x = x if x is not None else SCREEN_WIDTH
         
-        Args:
-            x: Starting x position of the pipe
-        """
-        self.x = x
-        self.width = PIPE_WIDTH
-        self.gap = PIPE_GAP
-        self.velocity = PIPE_VELOCITY
+        min_gap_top = 80
+        max_gap_top = SCREEN_HEIGHT - 50 - PIPE_GAP - 80
+        
+        self.gap_top = random.randint(min_gap_top, max_gap_top)
+        self.gap_bottom = self.gap_top + PIPE_GAP
         self.passed = False
-        
-        # Random gap position (leaving room for the gap)
-        min_top = 50
-        max_top = SCREEN_HEIGHT - self.gap - 50
-        self.top = random.randint(min_top, max_top)  # Bottom of top pipe
-        self.bottom = self.top + self.gap  # Top of bottom pipe
     
     def update(self):
-        """Move the pipe to the left."""
-        self.x -= self.velocity
+        self.x -= PIPE_SPEED
     
     def is_off_screen(self):
-        """Check if the pipe has moved off the left side of the screen."""
-        return self.x + self.width < 0
+        return self.x + PIPE_WIDTH < 0
     
     def collides_with(self, bird):
-        """
-        Check if the pipe collides with a bird.
+        if not bird.alive:
+            return False
         
-        Args:
-            bird: The bird to check collision with
-            
-        Returns:
-            True if there is a collision, False otherwise
-        """
-        bird_rect = bird.get_rect()
+        bird_left = bird.x - BIRD_RADIUS
+        bird_right = bird.x + BIRD_RADIUS
+        bird_top = bird.y - BIRD_RADIUS
+        bird_bottom = bird.y + BIRD_RADIUS
         
-        # Top pipe rectangle
-        top_rect = pygame.Rect(self.x, 0, self.width, self.top)
+        pipe_left = self.x
+        pipe_right = self.x + PIPE_WIDTH
         
-        # Bottom pipe rectangle
-        bottom_rect = pygame.Rect(self.x, self.bottom, self.width, 
-                                  SCREEN_HEIGHT - self.bottom)
+        if bird_right > pipe_left and bird_left < pipe_right:
+            if bird_top < self.gap_top or bird_bottom > self.gap_bottom:
+                return True
         
-        return bird_rect.colliderect(top_rect) or bird_rect.colliderect(bottom_rect)
+        return False
     
     def draw(self, screen):
-        """Draw the pipe pair on the screen."""
-        # Draw top pipe
-        top_rect = pygame.Rect(self.x, 0, self.width, self.top)
-        pygame.draw.rect(screen, GREEN, top_rect)
-        pygame.draw.rect(screen, DARK_GREEN, top_rect, 3)
+        # Top pipe
+        top_pipe_rect = pygame.Rect(self. x, 0, PIPE_WIDTH, self.gap_top)
+        pygame.draw.rect(screen, GREEN, top_pipe_rect)
         
-        # Draw top pipe cap
-        cap_height = 20
-        cap_rect = pygame.Rect(self.x - 5, self.top - cap_height, 
-                               self.width + 10, cap_height)
-        pygame.draw.rect(screen, GREEN, cap_rect)
-        pygame.draw.rect(screen, DARK_GREEN, cap_rect, 3)
+        # Top cap
+        top_cap_rect = pygame.Rect(self.x - 5, self.gap_top - 20, PIPE_WIDTH + 10, 20)
+        pygame.draw.rect(screen, GREEN, top_cap_rect)
         
-        # Draw bottom pipe
-        bottom_rect = pygame.Rect(self.x, self.bottom, self.width, 
-                                  SCREEN_HEIGHT - self.bottom)
-        pygame.draw.rect(screen, GREEN, bottom_rect)
-        pygame.draw.rect(screen, DARK_GREEN, bottom_rect, 3)
+        # Bottom pipe
+        bottom_pipe_rect = pygame. Rect(self.x, self.gap_bottom, PIPE_WIDTH, SCREEN_HEIGHT - 50 - self.gap_bottom)
+        pygame.draw.rect(screen, GREEN, bottom_pipe_rect)
         
-        # Draw bottom pipe cap
-        cap_rect = pygame.Rect(self.x - 5, self.bottom, 
-                               self.width + 10, cap_height)
-        pygame.draw.rect(screen, GREEN, cap_rect)
-        pygame.draw.rect(screen, DARK_GREEN, cap_rect, 3)
+        # Bottom cap
+        bottom_cap_rect = pygame.Rect(self.x - 5, self. gap_bottom, PIPE_WIDTH + 10, 20)
+        pygame.draw.rect(screen, GREEN, bottom_cap_rect)
+        
+        # Dark edges
+        pygame.draw.rect(screen, (20, 100, 20), top_pipe_rect, 3)
+        pygame.draw.rect(screen, (20, 100, 20), bottom_pipe_rect, 3)
+        pygame.draw.rect(screen, (20, 100, 20), top_cap_rect, 3)
+        pygame.draw.rect(screen, (20, 100, 20), bottom_cap_rect, 3)
+
+
+class PipeManager:
+    def __init__(self):
+        self.pipes = []
+        self. spawn_timer = PIPE_SPAWN_RATE - 30  # Spawn first pipe sooner
+    
+    def update(self):
+        for pipe in self.pipes:
+            pipe. update()
+        
+        self.pipes = [pipe for pipe in self. pipes if not pipe.is_off_screen()]
+        
+        self.spawn_timer += 1
+        if self.spawn_timer >= PIPE_SPAWN_RATE: 
+            self.pipes.append(Pipe())
+            self.spawn_timer = 0
+    
+    def draw(self, screen):
+        for pipe in self.pipes:
+            pipe.draw(screen)
+    
+    def check_collisions(self, birds):
+        for bird in birds: 
+            if not bird.alive:
+                continue
+            for pipe in self.pipes:
+                if pipe.collides_with(bird):
+                    bird.die()
+    
+    def check_passed(self, birds):
+        for pipe in self.pipes:
+            if pipe.passed:
+                continue
+            for bird in birds:
+                if bird.alive and bird.x > pipe.x + PIPE_WIDTH:
+                    pipe.passed = True
+                    for b in birds:
+                        if b.alive:
+                            b. score += 1
+                            b.fitness += 100
+                    break
+    
+    def reset(self):
+        self.pipes = []
+        self.spawn_timer = PIPE_SPAWN_RATE - 30  # Spawn first pipe sooner

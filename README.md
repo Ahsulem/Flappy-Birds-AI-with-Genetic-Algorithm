@@ -103,3 +103,5 @@ This project is open source and available for educational purposes.
 ## Acknowledgments
 
 Inspired by the classic Flappy Bird game and evolutionary learning techniques.
+
+![Game Screenshot](Screenshots-Flappy/)
